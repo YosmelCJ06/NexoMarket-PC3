@@ -27,4 +27,15 @@ public class NotificacionClienteObservador implements ObservadorPedido {
     public String getUltimoMensaje() {
         return ultimoMensaje;
     }
+
+    /** Dos observadores que notifican al mismo correo se consideran el mismo suscriptor. */
+    @Override
+    public boolean equals(Object otro) {
+        return otro instanceof NotificacionClienteObservador o && correoCliente.equals(o.correoCliente);
+    }
+
+    @Override
+    public int hashCode() {
+        return correoCliente.hashCode();
+    }
 }

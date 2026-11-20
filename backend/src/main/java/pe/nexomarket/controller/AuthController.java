@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+import pe.nexomarket.web.SesionHttp;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -34,7 +35,7 @@ public class AuthController {
         }
 
         List<AccountRecord> accounts = jdbcTemplate.query("""
-                SELECT u.id_usuario, u.email, u.password_hash, u.activo,
+                SELECT u.id_usuario, u.id_cliente, u.email, u.password_hash, u.activo,
                        r.nombre_rol, COALESCE(c.nombre, u.email) AS nombre
                 FROM usuario u
                 JOIN rol r ON r.id_rol = u.id_rol
@@ -42,6 +43,7 @@ public class AuthController {
                 WHERE LOWER(u.email) = LOWER(?)
                 """, (resultSet, rowNumber) -> new AccountRecord(
                 resultSet.getInt("id_usuario"),
+                (Integer) resultSet.getObject("id_cliente"),
                 resultSet.getString("email"),
                 resultSet.getString("password_hash"),
                 resultSet.getBoolean("activo"),
@@ -57,19 +59,20 @@ public class AuthController {
         String roleCode = account.role().toUpperCase(Locale.ROOT);
         if (!roleCode.equals("CLIENTE") && !roleCode.equals("ADMINISTRADOR")) return unauthorized();
 
-        session.setAttribute("nexomarket.userId", account.id());
-        session.setAttribute("nexomarket.email", account.email());
-        session.setAttribute("nexomarket.name", account.name());
-        session.setAttribute("nexomarket.role", roleCode);
+        session.setAttribute(SesionHttp.USUARIO_ID, account.id());
+        session.setAttribute(SesionHttp.CLIENTE_ID, account.clientId());
+        session.setAttribute(SesionHttp.EMAIL, account.email());
+        session.setAttribute(SesionHttp.NOMBRE, account.name());
+        session.setAttribute(SesionHttp.ROL, roleCode);
         return ResponseEntity.ok(sessionResponse(account.id(), account.email(), account.name(), roleCode));
     }
 
     @GetMapping("/session")
     public ResponseEntity<?> currentSession(HttpSession session) {
-        Integer id = (Integer) session.getAttribute("nexomarket.userId");
-        String email = (String) session.getAttribute("nexomarket.email");
-        String name = (String) session.getAttribute("nexomarket.name");
-        String roleCode = (String) session.getAttribute("nexomarket.role");
+        Integer id = (Integer) session.getAttribute(SesionHttp.USUARIO_ID);
+        String email = (String) session.getAttribute(SesionHttp.EMAIL);
+        String name = (String) session.getAttribute(SesionHttp.NOMBRE);
+        String roleCode = (String) session.getAttribute(SesionHttp.ROL);
         if (id == null || email == null || name == null || roleCode == null) {
             return ResponseEntity.noContent().build();
         }
@@ -130,7 +133,7 @@ public class AuthController {
         return new SessionResponse(id, email, name, role, roleCode);
     }
 
-    private record AccountRecord(int id, String email, String passwordHash, boolean active, String role, String name) {
+    private record AccountRecord(int id, Integer clientId, String email, String passwordHash, boolean active, String role, String name) {
     }
 
     public record LoginRequest(String email, String password) {

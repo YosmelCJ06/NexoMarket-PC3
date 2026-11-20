@@ -12,6 +12,8 @@ import java.util.function.Supplier;
  */
 public final class EstadosPedido {
     private static final Map<String, Supplier<EstadoPedido>> POR_CODIGO = new LinkedHashMap<>();
+    /** Códigos usados en la PC2 que se siguen aceptando al leer la base de datos. */
+    private static final Map<String, Supplier<EstadoPedido>> HEREDADOS = Map.of("CONFIRMADO", EstadoPagado::new);
 
     static {
         POR_CODIGO.put(EstadoPendiente.CODIGO, EstadoPendiente::new);
@@ -27,7 +29,8 @@ public final class EstadosPedido {
 
     public static EstadoPedido desdeCodigo(String codigo) {
         if (codigo == null) throw new IllegalArgumentException("El estado del pedido es obligatorio.");
-        Supplier<EstadoPedido> fabrica = POR_CODIGO.get(codigo.trim().toUpperCase(Locale.ROOT));
+        String normalizado = codigo.trim().toUpperCase(Locale.ROOT);
+        Supplier<EstadoPedido> fabrica = POR_CODIGO.getOrDefault(normalizado, HEREDADOS.get(normalizado));
         if (fabrica == null) throw new IllegalArgumentException("Estado de pedido desconocido: " + codigo);
         return fabrica.get();
     }

@@ -14,6 +14,7 @@ import pe.nexomarket.domain.pedido.PedidoRepository;
  */
 public class PedidoRepositoryEnMemoria implements PedidoRepository {
     private final Map<Integer, Pedido> pedidos = new ConcurrentHashMap<>();
+    private final Map<Integer, String> correos = new ConcurrentHashMap<>();
 
     @Override
     public Optional<Pedido> buscarPorId(int pedidoId) {
@@ -28,5 +29,14 @@ public class PedidoRepositoryEnMemoria implements PedidoRepository {
     @Override
     public void guardar(Pedido pedido) {
         pedidos.put(pedido.getId(), pedido);
+    }
+
+    @Override
+    public Optional<String> buscarCorreoCliente(int clienteId) {
+        return Optional.ofNullable(correos.get(clienteId));
+    }
+
+    public void registrarCorreo(int clienteId, String correo) {
+        correos.put(clienteId, correo);
     }
 }

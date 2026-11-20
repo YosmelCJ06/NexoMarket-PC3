@@ -95,6 +95,14 @@ class PedidoStateObserverMementoTest {
     }
 
     @Test
+    void unObservadorSuscritoDosVecesRecibeUnSoloAviso() {
+        pedido.suscribir(auditoria);
+        pedido.suscribir(new NotificacionClienteObservador("cliente@nexomarket.pe"));
+        pedido.pagar();
+        assertEquals(1, auditoria.getRegistros().size());
+    }
+
+    @Test
     void unObservadorDesuscritoDejaDeRecibirAvisos() {
         pedido.desuscribir(auditoria);
         pedido.pagar();
