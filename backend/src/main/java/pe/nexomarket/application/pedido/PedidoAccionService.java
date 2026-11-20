@@ -50,7 +50,15 @@ public class PedidoAccionService {
     /** COMMAND: ejecuta la acción como comando reversible y guarda el nuevo estado. */
     public DetallePedido ejecutarAccion(int pedidoId, String accion, UsuarioSesion usuario) {
         exigirAdministrador(usuario);
-        AccionPedido tipo = AccionPedido.desdeTexto(accion);
+        return aplicar(pedidoId, AccionPedido.desdeTexto(accion));
+    }
+
+    /** Usado por el checkout: el pago ya se cobró, así que el sistema marca el pedido como PAGADO. */
+    public DetallePedido confirmarPago(int pedidoId) {
+        return aplicar(pedidoId, AccionPedido.PAGAR);
+    }
+
+    private DetallePedido aplicar(int pedidoId, AccionPedido tipo) {
         Pedido pedido = repositorio.buscarPorId(pedidoId).orElseThrow(() -> new PedidoNoEncontradoException(pedidoId));
         suscribirObservadores(pedido);
         invocador.ejecutarComando(tipo.crearComando(pedido, historial));
