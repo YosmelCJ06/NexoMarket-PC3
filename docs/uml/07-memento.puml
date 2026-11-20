@@ -1,0 +1,52 @@
+@startuml memento
+!pragma layout smetana
+title NexoMarket - Patrón Memento
+skinparam classAttributeIconSize 0
+hide empty members
+set separator none
+
+package "domain.pedido" {
+  class Pedido <<Originator>> {
+    - id: int
+    - montoTotal: BigDecimal
+    - estadoActual: EstadoPedido
+    + crearMemento(): PedidoMemento
+    + restaurar(memento: PedidoMemento)
+  }
+
+  class PedidoMemento <<Memento>> {
+    - pedidoId: int
+    - estado: EstadoPedido
+    - montoTotal: BigDecimal
+    - fechaCaptura: Instant
+    ~ PedidoMemento(pedidoId, estado, montoTotal)
+    ~ pedidoId(): int
+    ~ estado(): EstadoPedido
+    ~ montoTotal(): BigDecimal
+    + getFechaCaptura(): Instant
+  }
+
+  interface EstadoPedido <<State>>
+}
+
+package "domain.pedido.memento" {
+  class HistorialPedidoCaretaker <<Caretaker>> {
+    - historialPorPedido: Map<Integer, Deque<PedidoMemento>>
+    + guardar(pedidoId: int, memento: PedidoMemento)
+    + deshacer(pedidoId: int): PedidoMemento
+    + puedeDeshacer(pedidoId: int): boolean
+    + cantidadGuardada(pedidoId: int): int
+  }
+}
+
+Pedido ..> PedidoMemento : crea / restaura
+HistorialPedidoCaretaker o--> "*" PedidoMemento : pila por pedido
+PedidoMemento --> EstadoPedido : estado
+Pedido --> EstadoPedido : estadoActual
+
+note right of PedidoMemento
+  Constructor y lectura con visibilidad de paquete (~):
+  solo Pedido puede crear y leer el memento.
+  El Caretaker lo guarda sin acceder a su contenido.
+end note
+@enduml
