@@ -1,0 +1,87 @@
+@startuml bridge
+!pragma layout smetana
+title NexoMarket - Patrón Bridge (con Composite)
+skinparam classAttributeIconSize 0
+hide empty members
+
+abstract class Exportable <<Abstraction>> {
+  # formato: FormatoExportacion
+  + generarReporte(): String
+  + nombreArchivo(): String
+  + tipoContenido(): String
+  # {abstract} construirReporte(): ReporteTabla
+  # {abstract} nombreBase(): String
+}
+
+class CatalogoExportable <<RefinedAbstraction>> {
+  - nodoRaiz: NodoCatalogo
+  # construirReporte(): ReporteTabla
+  # nombreBase(): String
+}
+
+class PedidosExportable <<RefinedAbstraction>> {
+  - pedidos: List<DetallePedido>
+  # construirReporte(): ReporteTabla
+  # nombreBase(): String
+}
+
+interface FormatoExportacion <<Implementor>> {
+  + exportar(reporte: ReporteTabla): String
+  + tipoContenido(): String
+  + extension(): String
+}
+
+class FormatoHTMLExport <<ConcreteImplementor>> {
+  + exportar(reporte: ReporteTabla): String
+  + tipoContenido(): String
+  + extension(): String
+}
+
+class FormatoCSVExport <<ConcreteImplementor>> {
+  + exportar(reporte: ReporteTabla): String
+  + tipoContenido(): String
+  + extension(): String
+}
+
+class ReporteTabla <<record>> {
+  + titulo: String
+  + columnas: List<String>
+  + filas: List<List<String>>
+  + resumen: Map<String, String>
+}
+
+interface NodoCatalogo <<Component>> {
+  + obtenerNombre(): String
+  + obtenerPrecioTotal(): BigDecimal
+  + contarProductos(): int
+  + obtenerStockTotal(): int
+  + obtenerProductos(): List<ProductoHoja>
+}
+class CategoriaComposite <<Composite>> {
+  - hijos: List<NodoCatalogo>
+  + agregar(nodo: NodoCatalogo): CategoriaComposite
+  + quitar(nodo: NodoCatalogo)
+}
+class ProductoHoja <<Leaf>> {
+  - id: int
+  - nombre: String
+  - precio: BigDecimal
+  - stock: int
+}
+
+Exportable <|-- CatalogoExportable
+Exportable <|-- PedidosExportable
+Exportable o-right-> "1" FormatoExportacion : formato\n(puente)
+FormatoExportacion <|.. FormatoHTMLExport
+FormatoExportacion <|.. FormatoCSVExport
+Exportable ..> ReporteTabla : construye
+FormatoExportacion ..> ReporteTabla : escribe
+
+CatalogoExportable --> NodoCatalogo : nodoRaiz
+NodoCatalogo <|.. CategoriaComposite
+NodoCatalogo <|.. ProductoHoja
+note right of CategoriaComposite
+  hijos contiene NodoCatalogo (*):
+  otras categorías o productos
+end note
+@enduml

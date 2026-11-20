@@ -1,0 +1,78 @@
+@startuml command
+!pragma layout smetana
+title NexoMarket - Patrón Command
+skinparam classAttributeIconSize 0
+hide empty members
+
+interface Comando <<Command>> {
+  + ejecutar()
+  + deshacer()
+  + descripcion(): String
+}
+
+abstract class CambioEstadoPedidoCommand {
+  - pedido: Pedido
+  - historial: HistorialPedidoCaretaker
+  + ejecutar()
+  + deshacer()
+  + descripcion(): String
+  + pedidoId(): int
+  # {abstract} aplicar(pedido: Pedido)
+  # {abstract} nombreAccion(): String
+}
+
+class PagarPedidoCommand <<ConcreteCommand>>
+class PrepararPedidoCommand <<ConcreteCommand>>
+class EnviarPedidoCommand <<ConcreteCommand>>
+class EntregarPedidoCommand <<ConcreteCommand>>
+class CancelarPedidoCommand <<ConcreteCommand>>
+
+class InvocadorComandos <<Invoker>> {
+  - ejecutados: Deque<Comando>
+  - registro: List<RegistroComando>
+  + ejecutarComando(comando: Comando)
+  + deshacerUltimo(): Comando
+  + deshacerUltimo(filtro: Predicate<Comando>): Comando
+  + getRegistro(): List<RegistroComando>
+}
+
+class RegistroComando <<record>> {
+  + descripcion: String
+  + tipo: Tipo
+  + fecha: Instant
+}
+
+enum AccionPedido {
+  PAGAR
+  PREPARAR
+  ENVIAR
+  ENTREGAR
+  CANCELAR
+  + crearComando(pedido, historial): CambioEstadoPedidoCommand
+  + {static} desdeTexto(texto: String): AccionPedido
+}
+
+class Pedido <<Receiver>> {
+  + pagar()
+  + preparar()
+  + enviar()
+  + entregar()
+  + cancelar()
+  + crearMemento(): PedidoMemento
+  + restaurar(memento: PedidoMemento)
+}
+
+class HistorialPedidoCaretaker
+
+Comando <|.. CambioEstadoPedidoCommand
+CambioEstadoPedidoCommand <|-- PagarPedidoCommand
+CambioEstadoPedidoCommand <|-- PrepararPedidoCommand
+CambioEstadoPedidoCommand <|-- EnviarPedidoCommand
+CambioEstadoPedidoCommand <|-- EntregarPedidoCommand
+CambioEstadoPedidoCommand <|-- CancelarPedidoCommand
+InvocadorComandos o--> "*" Comando : ejecutados
+InvocadorComandos *--> "*" RegistroComando
+CambioEstadoPedidoCommand --> Pedido : receiver
+CambioEstadoPedidoCommand --> HistorialPedidoCaretaker : guarda mementos
+AccionPedido ..> CambioEstadoPedidoCommand : crea
+@enduml

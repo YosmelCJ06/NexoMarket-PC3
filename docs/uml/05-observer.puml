@@ -1,0 +1,46 @@
+@startuml observer
+!pragma layout smetana
+title NexoMarket - Patrón Observer
+skinparam classAttributeIconSize 0
+hide empty members
+
+class Pedido <<Subject>> {
+  - observadores: List<ObservadorPedido>
+  + suscribir(observador: ObservadorPedido)
+  + desuscribir(observador: ObservadorPedido)
+  - notificar(estadoAnterior: String, detalle: String)
+}
+
+interface ObservadorPedido <<Observer>> {
+  + actualizar(evento: EventoPedido)
+}
+
+class EventoPedido <<record>> {
+  + pedidoId: int
+  + codigoPedido: String
+  + estadoAnterior: String
+  + estadoNuevo: String
+  + detalle: String
+  + fecha: Instant
+}
+
+class AuditoriaPedidoObservador <<ConcreteObserver>> {
+  - registros: List<EventoPedido>
+  + actualizar(evento: EventoPedido)
+  + getRegistros(): List<EventoPedido>
+  + getRegistros(pedidoId: int): List<EventoPedido>
+}
+
+class NotificacionClienteObservador <<ConcreteObserver>> {
+  - correoCliente: String
+  - ultimoMensaje: String
+  + actualizar(evento: EventoPedido)
+  + getUltimoMensaje(): String
+}
+
+Pedido o--> "*" ObservadorPedido : observadores
+ObservadorPedido <|.. AuditoriaPedidoObservador
+ObservadorPedido <|.. NotificacionClienteObservador
+Pedido ..> EventoPedido : crea
+ObservadorPedido ..> EventoPedido : recibe
+@enduml
