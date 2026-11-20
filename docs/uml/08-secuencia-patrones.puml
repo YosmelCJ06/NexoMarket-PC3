@@ -1,0 +1,50 @@
+@startuml secuencia
+title NexoMarket - Interacción entre los patrones
+autonumber
+skinparam sequenceMessageAlign center
+
+actor Usuario
+participant "PedidoServiceProxy\n<<Proxy>>" as Proxy
+participant "PedidoRealService\n<<RealSubject>>" as Real
+participant "AccionPedido" as Accion
+participant "InvocadorComandos\n<<Invoker>>" as Invocador
+participant "PagarPedidoCommand\n<<Command>>" as Cmd
+participant "Pedido\n«Context / Subject /\nOriginator»" as Pedido
+participant "EstadoPendiente\n<<State>>" as Estado
+participant "HistorialPedidoCaretaker\n<<Caretaker>>" as Historial
+participant "AuditoriaPedidoObservador\nNotificacionClienteObservador\n<<Observer>>" as Obs
+
+== Consulta protegida (Proxy) ==
+Usuario -> Proxy : obtenerDetallePedido(id)
+Proxy -> Proxy : valida rol (INVITADO es rechazado)
+Proxy -> Real : obtenerDetallePedido(id)\n(se crea al primer uso)
+Real --> Proxy : DetallePedido
+Proxy -> Proxy : si es CLIENTE, valida que sea el dueño
+Proxy --> Usuario : DetallePedido
+
+== Acción reversible (Command + Memento + State + Observer) ==
+Usuario -> Accion : desdeTexto("pagar")
+Accion -> Cmd : crearComando(pedido, historial)
+Usuario -> Invocador : ejecutarComando(cmd)
+Invocador -> Cmd : ejecutar()
+Cmd -> Pedido : crearMemento()
+Pedido --> Cmd : PedidoMemento
+Cmd -> Pedido : pagar()
+Pedido -> Estado : pagar(this)
+Estado -> Pedido : cambiarEstado(EstadoPagado, detalle)
+Pedido -> Obs : actualizar(EventoPedido)
+Cmd -> Historial : guardar(id, memento)
+Invocador -> Invocador : registro EJECUTADO
+
+== Deshacer ==
+Usuario -> Invocador : deshacerUltimo()
+Invocador -> Cmd : deshacer()
+Cmd -> Historial : deshacer(id)
+Historial --> Cmd : PedidoMemento
+Cmd -> Pedido : restaurar(memento)
+Pedido -> Obs : actualizar(EventoPedido "restaurado")
+Invocador -> Invocador : registro DESHECHO
+
+== Reporte (Bridge + Composite) ==
+note over Usuario : new CatalogoExportable(catalogo, new FormatoCSVExport()).generarReporte()
+@enduml

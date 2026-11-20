@@ -19,6 +19,61 @@ let cart = [];
 let cartOpen = false;
 let checkoutOpen = false;
 let toastTimer;
+// Panel de pedidos del administrador (State, Command, Memento, Observer) y consulta con Proxy
+let adminOrders = [];
+let adminOrdersStatus = 'idle';
+let orderHistory = null;
+let proxyLookup = null;
+const orderStatuses = ['PENDIENTE', 'PAGADO', 'PREPARANDO', 'ENVIADO', 'ENTREGADO', 'CANCELADO'];
+const orderActions = [
+  { action: 'pagar', label: 'Pagar' },
+  { action: 'preparar', label: 'Preparar' },
+  { action: 'enviar', label: 'Enviar' },
+  { action: 'entregar', label: 'Entregar' },
+  { action: 'cancelar', label: 'Cancelar' },
+];
+
+async function callApi(url, options = {}) {
+  try {
+    const response = await fetch(url, options);
+    const data = await response.json().catch(() => ({}));
+    return { ok: response.ok, status: response.status, data };
+  } catch {
+    return { ok: false, status: 0, data: { message: 'No se pudo conectar con el servidor.' } };
+  }
+}
+
+async function loadAdminOrders() {
+  adminOrdersStatus = 'loading';
+  render();
+  const result = await callApi('/api/orders');
+  adminOrders = result.ok ? result.data : [];
+  adminOrdersStatus = result.ok ? 'ready' : 'error';
+  render();
+}
+
+async function loadOrderHistory(orderId) {
+  const result = await callApi(`/api/orders/${orderId}/historial`);
+  if (!result.ok) {
+    notify(result.data.message || 'No se pudo cargar el historial.');
+    return;
+  }
+  orderHistory = result.data;
+  render();
+}
+
+async function runOrderAction(orderId, url, body) {
+  const result = await callApi(url, body
+    ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+    : { method: 'POST' });
+  if (!result.ok) {
+    notify(result.data.message || 'La operación no se pudo completar.');
+    return;
+  }
+  notify(`Pedido ${result.data.codigo}: ahora está ${result.data.estado}.`);
+  await loadAdminOrders();
+  await loadOrderHistory(orderId);
+}
 
 function readStore() {
   try {
@@ -153,7 +208,7 @@ function header() {
 }
 
 function footer() {
-  return '<footer class="footer-note">Catálogo conectado a PostgreSQL · Checkout de demostración</footer>';
+  return '<footer class="footer-note">Catálogo y pedidos en PostgreSQL · Pagos simulados (sin cobro real)</footer>';
 }
 
 function renderProducts() {
@@ -193,7 +248,7 @@ function renderOrders() {
         <div class="toolbar">
           <form class="toolbar" data-form="order-filter">
             <label class="field"><span>Estado</span><select name="status" aria-label="Filtrar pedidos por estado">
-              ${['TODOS', 'PENDIENTE', 'CONFIRMADO', 'PREPARANDO', 'ENVIADO', 'ENTREGADO', 'CANCELADO'].map(status => `<option value="${status}" ${selectedOrderStatus === status ? 'selected' : ''}>${status === 'TODOS' ? 'Todos' : status}</option>`).join('')}
+              ${['TODOS', ...orderStatuses].map(status => `<option value="${status}" ${selectedOrderStatus === status ? 'selected' : ''}>${status === 'TODOS' ? 'Todos' : status}</option>`).join('')}
             </select></label>
             <button class="button secondary" type="submit">Filtrar</button>
           </form>
@@ -206,13 +261,42 @@ function renderOrders() {
         ${ordersStatus === 'ready' && customerOrders.length ? customerOrders.map(order => `<article class="order-row"><div><h3>Pedido #${order.id}</h3><p>${new Date(order.createdAt).toLocaleString('es-PE')} · ${order.items.map(item => `${escapeHtml(item.name)} × ${item.quantity}`).join(', ')}</p></div><div class="order-meta"><strong>${money(order.total)}</strong><span class="status ${statusClass(order.status)}">${escapeHtml(order.status)}</span></div></article>`).join('') : ''}
         ${ordersStatus === 'ready' && !customerOrders.length ? '<p class="empty-state">No hay pedidos para ese estado.</p>' : ''}
       </section>
+      <section class="form-panel" style="margin-top:24px">
+        <h2>Consultar un pedido por número</h2>
+        <p class="muted">La consulta pasa por el Proxy: solo puedes ver tus propios pedidos.</p>
+        <form class="toolbar" data-form="proxy-lookup">
+          <label class="field"><span>N.º de pedido</span><input name="orderId" type="number" min="1" required></label>
+          <button class="button secondary" type="submit">Consultar</button>
+        </form>
+        ${proxyLookup ? (proxyLookup.ok
+          ? `<p><strong>${escapeHtml(proxyLookup.data.codigo)}</strong> · ${money(proxyLookup.data.montoTotal)} · <span class="status ${statusClass(proxyLookup.data.estado)}">${escapeHtml(proxyLookup.data.estado)}</span></p>`
+          : `<p class="stock-low">Acceso rechazado (${proxyLookup.status}): ${escapeHtml(proxyLookup.data.message || 'sin detalle')}</p>`) : ''}
+      </section>
     </main>`;
 }
 
+function renderOrderHistory() {
+  if (!orderHistory) return '';
+  const { pedido, eventos, comandos, puedeDeshacer } = orderHistory;
+  return `
+    <section class="orders-panel" style="margin-top:24px">
+      <div class="section-heading"><h2>Historial de ${escapeHtml(pedido.codigo)}</h2><span class="muted">Estado actual: ${escapeHtml(pedido.estado)}</span></div>
+      <div class="admin-layout">
+        <div><h3>Auditoría (Observer)</h3>
+          ${eventos.length ? `<ul>${eventos.map(evento => `<li>${new Date(evento.fecha).toLocaleTimeString('es-PE')} · ${escapeHtml(evento.estadoAnterior)} → <strong>${escapeHtml(evento.estadoNuevo)}</strong> · ${escapeHtml(evento.detalle)}</li>`).join('')}</ul>` : '<p class="muted">Sin cambios registrados.</p>'}
+        </div>
+        <div><h3>Comandos (Command)</h3>
+          ${comandos.length ? `<ul>${comandos.map(comando => `<li>${new Date(comando.fecha).toLocaleTimeString('es-PE')} · ${escapeHtml(comando.descripcion)} · ${escapeHtml(comando.tipo)}</li>`).join('')}</ul>` : '<p class="muted">Sin comandos ejecutados.</p>'}
+          <p class="muted">${puedeDeshacer ? 'Hay estados guardados (Memento) para deshacer.' : 'No hay estados guardados para deshacer.'}</p>
+        </div>
+      </div>
+    </section>`;
+}
+
 function renderAdmin() {
-  const revenue = store.orders.reduce((total, order) => total + order.total, 0);
+  const revenue = adminOrders.filter(order => order.status !== 'CANCELADO').reduce((total, order) => total + Number(order.total), 0);
   const lowStockCount = store.products.filter(product => product.stock < 5).length;
-  const pendingCount = store.orders.filter(order => order.status === 'PREPARANDO').length;
+  const pendingCount = adminOrders.filter(order => ['PAGADO', 'CONFIRMADO', 'PREPARANDO'].includes(order.status)).length;
   const inventory = `
     <section class="table-panel">
       <div class="section-heading" style="padding:18px 18px 0"><h2>Productos y existencias</h2><span class="muted">${store.products.length} productos</span></div>
@@ -222,10 +306,23 @@ function renderAdmin() {
     </section>`;
   const orders = `
     <section class="orders-panel">
-      <div class="section-heading"><h2>Pedidos recientes</h2><span class="muted">${store.orders.length} en total</span></div>
-      <div class="table-scroll"><table><thead><tr><th>Pedido</th><th>Cliente</th><th>Fecha</th><th>Total</th><th>Estado</th></tr></thead>
-        <tbody>${store.orders.slice().reverse().map(order => `<tr><td>#${order.id}</td><td class="orders-customer">${escapeHtml(order.customerName)}<br><span class="muted">${escapeHtml(order.customerEmail)}</span></td><td>${new Date(order.createdAt).toLocaleDateString('es-PE')}</td><td>${money(order.total)}</td><td><form data-form="status" data-order-id="${order.id}"><select class="order-select" name="status" aria-label="Estado del pedido ${order.id}"><option ${order.status === 'PREPARANDO' ? 'selected' : ''}>PREPARANDO</option><option ${order.status === 'ENVIADO' ? 'selected' : ''}>ENVIADO</option><option ${order.status === 'ENTREGADO' ? 'selected' : ''}>ENTREGADO</option></select><button class="button secondary small" type="submit">Actualizar</button></form></td></tr>`).join('') || '<tr><td colspan="5" class="muted">Aún no hay pedidos registrados.</td></tr>'}</tbody>
+      <div class="section-heading"><h2>Pedidos (PostgreSQL)</h2><span class="muted">${adminOrders.length} en total · las acciones usan State, Command y Memento</span></div>
+      ${adminOrdersStatus === 'loading' ? '<p class="empty-state">Cargando pedidos…</p>' : ''}
+      ${adminOrdersStatus === 'error' ? '<p class="empty-state">No se pudieron cargar los pedidos desde PostgreSQL.</p>' : ''}
+      <div class="table-scroll"><table><thead><tr><th>Pedido</th><th>Cliente</th><th>Fecha</th><th>Total</th><th>Estado</th><th>Acciones</th></tr></thead>
+        <tbody>${adminOrders.map(order => `<tr><td>#${order.id}</td><td class="orders-customer">${escapeHtml(order.customerName)}<br><span class="muted">${escapeHtml(order.customerEmail)}</span></td><td>${new Date(order.createdAt).toLocaleDateString('es-PE')}</td><td>${money(order.total)}</td><td><span class="status ${statusClass(order.status)}">${escapeHtml(order.status)}</span></td><td><div style="display:flex;flex-wrap:wrap;gap:4px">${orderActions.map(item => `<button class="button secondary small" type="button" data-order-action="${item.action}" data-order-id="${order.id}">${item.label}</button>`).join('')}<button class="button small" type="button" data-order-undo="${order.id}">Deshacer</button><button class="button secondary small" type="button" data-order-history="${order.id}">Historial</button></div></td></tr>`).join('') || '<tr><td colspan="6" class="muted">Aún no hay pedidos registrados.</td></tr>'}</tbody>
       </table></div>
+    </section>
+    ${renderOrderHistory()}
+    <section class="form-panel" style="margin-top:24px">
+      <h2>Reportes (Bridge + Composite)</h2>
+      <p class="muted">El mismo reporte se exporta en distintos formatos.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <a class="button secondary small" href="/api/reports/catalog?formato=html" target="_blank" rel="noopener">Catálogo HTML</a>
+        <a class="button secondary small" href="/api/reports/catalog?formato=csv">Catálogo CSV (Excel)</a>
+        <a class="button secondary small" href="/api/reports/orders?formato=html" target="_blank" rel="noopener">Pedidos HTML</a>
+        <a class="button secondary small" href="/api/reports/orders?formato=csv">Pedidos CSV (Excel)</a>
+      </div>
     </section>`;
 
   return `
@@ -254,8 +351,8 @@ function renderAdmin() {
 }
 
 function statusClass(status) {
-  if (status === 'ENVIADO') return 'sent';
-  if (status === 'PREPARANDO') return 'pending';
+  if (status === 'ENVIADO' || status === 'ENTREGADO') return 'sent';
+  if (['PENDIENTE', 'PAGADO', 'CONFIRMADO', 'PREPARANDO'].includes(status)) return 'pending';
   return '';
 }
 
@@ -266,7 +363,7 @@ function renderCart() {
   return `<div class="cart-overlay" data-action="overlay-close"><aside class="cart-drawer" role="dialog" aria-modal="true" aria-labelledby="cart-title"><div class="drawer-heading"><h2 id="cart-title">Tu bolsa (${lines.reduce((sum, line) => sum + line.quantity, 0)})</h2><button class="icon-button" type="button" data-action="cart-close" aria-label="Cerrar bolsa">×</button></div>
     <div class="cart-lines">${lines.length ? lines.map(line => `<article class="cart-line"><img src="${escapeHtml(line.product.image)}" alt=""><div><h3>${escapeHtml(line.product.name)}</h3><p>${money(line.product.price)} c/u</p><div class="quantity"><button type="button" data-quantity="-1" data-product-id="${line.productId}" aria-label="Reducir cantidad">−</button><span>${line.quantity}</span><button type="button" data-quantity="1" data-product-id="${line.productId}" aria-label="Aumentar cantidad">+</button></div></div><button class="icon-button" type="button" data-remove-cart="${line.productId}" aria-label="Quitar ${escapeHtml(line.product.name)}">×</button></article>`).join('') : '<p class="empty-state">Tu bolsa está vacía.</p>'}</div>
     ${lines.length ? `<div class="cart-total"><span>Total</span><span>${money(total)}</span></div><button class="button login-submit" type="button" data-action="checkout-open">Continuar compra</button>` : ''}
-    ${checkoutOpen && lines.length ? `<form class="checkout-form" data-form="checkout"><h3>Datos de entrega</h3><label class="field"><span>Nombre del destinatario</span><input name="customerName" required value="${escapeHtml(user.name)}"></label><label class="field"><span>Dirección</span><input name="address" required placeholder="Av. / calle y número"></label><label class="field"><span>Método de pago</span><select name="payment"><option>YAPE</option><option>TARJETA</option></select></label><p class="muted" style="font-size:.78rem">Pago y envío en modo de demostración.</p><button class="button login-submit" type="submit">Confirmar pedido · ${money(total)}</button></form>` : ''}
+    ${checkoutOpen && lines.length ? `<form class="checkout-form" data-form="checkout"><h3>Datos de entrega</h3><label class="field"><span>Nombre del destinatario</span><input name="customerName" required value="${escapeHtml(user.name)}"></label><label class="field"><span>Dirección</span><input name="address" required placeholder="Av. / calle y número"></label><label class="field"><span>Método de pago</span><select name="payment"><option>YAPE</option><option>TARJETA</option></select></label><p class="muted" style="font-size:.78rem">El pago es simulado: no se realiza ningún cobro real.</p><button class="button login-submit" type="submit">Confirmar pedido · ${money(total)}</button></form>` : ''}
   </aside></div>`;
 }
 
@@ -298,8 +395,11 @@ async function setSession(account) {
   user = account;
   activeView = account.role === 'Administrador' ? 'admin' : 'catalog';
   productsStatus = 'loading';
+  orderHistory = null;
+  proxyLookup = null;
   render();
   await loadProducts();
+  if (account.role === 'Administrador') await loadAdminOrders();
 }
 
 async function restoreSession() {
@@ -317,31 +417,27 @@ async function restoreSession() {
   renderLogin();
 }
 
-function submitCheckout(form) {
+// El checkout llama a POST /api/orders: el CheckoutFacade descuenta stock, guarda el pedido,
+// cobra con el método elegido (Strategy) y lo marca como PAGADO (Command + State + Observer).
+async function submitCheckout(form) {
   const formData = new FormData(form);
-  const orderItems = cart.map(line => {
-    const product = store.products.find(item => item.id === line.productId);
-    return { productId: product.id, name: product.name, quantity: line.quantity, price: product.price };
+  const result = await callApi('/api/orders', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      items: cart.map(line => ({ productoId: line.productId, cantidad: line.quantity })),
+      metodoPago: String(formData.get('payment')),
+    }),
   });
-  const orderTotal = orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const order = {
-    id: store.orders.reduce((highest, item) => Math.max(highest, item.id), 10000) + 1,
-    customerName: String(formData.get('customerName')).trim(),
-    customerEmail: user.email,
-    address: String(formData.get('address')).trim(),
-    payment: String(formData.get('payment')),
-    items: orderItems,
-    total: orderTotal,
-    status: 'PREPARANDO',
-    createdAt: new Date().toISOString(),
-  };
-  store.orders.push(order);
-  saveStore();
+  if (!result.ok) {
+    notify(result.data.message || 'No se pudo registrar el pedido.');
+    return;
+  }
   cart = [];
   cartOpen = false;
   checkoutOpen = false;
-  render();
-  notify(`Pedido #${order.id} creado. Estado: PREPARANDO.`);
+  await loadProducts();
+  notify(`Pedido ${result.data.codigo} registrado. Estado: ${result.data.estado}.`);
 }
 
 app.addEventListener('click', async event => {
@@ -394,6 +490,26 @@ app.addEventListener('click', async event => {
   if (removeButton) {
     cart = cart.filter(item => item.productId !== Number(removeButton.dataset.removeCart));
     render();
+    return;
+  }
+
+  const orderActionButton = event.target.closest('[data-order-action]');
+  if (orderActionButton) {
+    const orderId = orderActionButton.dataset.orderId;
+    await runOrderAction(orderId, `/api/orders/${orderId}/acciones`, { accion: orderActionButton.dataset.orderAction });
+    return;
+  }
+
+  const undoButton = event.target.closest('[data-order-undo]');
+  if (undoButton) {
+    const orderId = undoButton.dataset.orderUndo;
+    await runOrderAction(orderId, `/api/orders/${orderId}/deshacer`);
+    return;
+  }
+
+  const historyButton = event.target.closest('[data-order-history]');
+  if (historyButton) {
+    await loadOrderHistory(historyButton.dataset.orderHistory);
     return;
   }
 
@@ -469,7 +585,7 @@ app.addEventListener('submit', async event => {
     loadCustomerOrders();
   }
 
-  if (form.dataset.form === 'checkout') submitCheckout(form);
+  if (form.dataset.form === 'checkout') await submitCheckout(form);
 
   if (form.dataset.form === 'product') {
     const product = {
@@ -511,14 +627,11 @@ app.addEventListener('submit', async event => {
     }
   }
 
-  if (form.dataset.form === 'status') {
-    const order = store.orders.find(item => item.id === Number(form.dataset.orderId));
-    const nextStatus = String(formData.get('status'));
-    if (!order || !['PREPARANDO', 'ENVIADO', 'ENTREGADO'].includes(nextStatus)) return;
-    order.status = nextStatus;
-    saveStore();
+  if (form.dataset.form === 'proxy-lookup') {
+    const orderId = Number(formData.get('orderId'));
+    if (!Number.isInteger(orderId) || orderId < 1) return;
+    proxyLookup = await callApi(`/api/orders/${orderId}`);
     render();
-    notify(`Pedido #${order.id} actualizado a ${nextStatus}.`);
   }
 });
 

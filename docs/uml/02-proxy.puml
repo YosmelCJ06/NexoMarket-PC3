@@ -1,0 +1,63 @@
+@startuml proxy
+!pragma layout smetana
+title NexoMarket - Patrón Proxy
+skinparam classAttributeIconSize 0
+hide empty members
+set separator none
+
+package "application.pedido.consulta" {
+  interface IPedidoService <<Subject>> {
+    + obtenerDetallePedido(pedidoId: int): DetallePedido
+  }
+
+  class PedidoRealService <<RealSubject>> {
+    - repositorio: PedidoRepository
+    + obtenerDetallePedido(pedidoId: int): DetallePedido
+  }
+
+  class PedidoServiceProxy <<Proxy>> {
+    - creadorServicioReal: Supplier<IPedidoService>
+    - usuario: UsuarioSesion
+    - servicioReal: IPedidoService
+    + obtenerDetallePedido(pedidoId: int): DetallePedido
+    + servicioRealCreado(): boolean
+    - servicioReal(): IPedidoService
+    - denegar(pedidoId: int, mensaje: String): AccesoDenegadoException
+  }
+
+  class DetallePedido <<record>> {
+    + id: int
+    + codigo: String
+    + clienteId: int
+    + montoTotal: BigDecimal
+    + estado: String
+  }
+}
+
+package "domain.seguridad" {
+  class UsuarioSesion <<record>> {
+    + usuarioId: Integer
+    + clienteId: Integer
+    + rol: Rol
+    + esAdministrador(): boolean
+    + esCliente(): boolean
+  }
+  enum Rol {
+    INVITADO
+    CLIENTE
+    ADMINISTRADOR
+  }
+}
+
+interface PedidoRepository {
+  + buscarPorId(pedidoId: int): Optional<Pedido>
+}
+
+IPedidoService <|.. PedidoRealService
+IPedidoService <|.. PedidoServiceProxy
+PedidoServiceProxy ..> PedidoRealService : crea al primer uso\n(carga diferida)
+PedidoServiceProxy --> UsuarioSesion : valida rol y dueño
+UsuarioSesion --> Rol
+PedidoRealService --> PedidoRepository
+IPedidoService ..> DetallePedido : devuelve
+@enduml

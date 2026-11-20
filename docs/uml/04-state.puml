@@ -1,0 +1,83 @@
+@startuml state
+!pragma layout smetana
+title NexoMarket - Patrón State
+skinparam classAttributeIconSize 0
+hide empty members
+
+class Pedido <<Context>> {
+  - id: int
+  - clienteId: int
+  - montoTotal: BigDecimal
+  - estadoActual: EstadoPedido
+  + pagar()
+  + preparar()
+  + enviar()
+  + entregar()
+  + cancelar()
+  ~ cambiarEstado(nuevoEstado: EstadoPedido, detalle: String)
+  + getNombreEstado(): String
+  + {static} reconstruir(id, clienteId, montoTotal, codigoEstado): Pedido
+}
+
+interface EstadoPedido <<State>> {
+  + pagar(pedido: Pedido)
+  + preparar(pedido: Pedido)
+  + enviar(pedido: Pedido)
+  + entregar(pedido: Pedido)
+  + cancelar(pedido: Pedido)
+  + getNombreEstado(): String
+  + esFinal(): boolean
+}
+
+abstract class EstadoBase {
+  + pagar(pedido: Pedido)
+  + preparar(pedido: Pedido)
+  + enviar(pedido: Pedido)
+  + entregar(pedido: Pedido)
+  + cancelar(pedido: Pedido)
+  - rechazar(accion: String): TransicionInvalidaException
+}
+
+class EstadoPendiente <<PENDIENTE>> {
+  + pagar(pedido: Pedido)
+  + cancelar(pedido: Pedido)
+}
+class EstadoPagado <<PAGADO>> {
+  + preparar(pedido: Pedido)
+  + cancelar(pedido: Pedido)
+}
+class EstadoEnPreparacion <<PREPARANDO>> {
+  + enviar(pedido: Pedido)
+  + cancelar(pedido: Pedido)
+}
+class EstadoEnviado <<ENVIADO>> {
+  + entregar(pedido: Pedido)
+}
+class EstadoEntregado <<ENTREGADO>> {
+  + esFinal(): boolean
+}
+class EstadoCancelado <<CANCELADO>> {
+  + esFinal(): boolean
+}
+
+class TransicionInvalidaException {
+  - estadoActual: String
+  - accion: String
+}
+
+class EstadosPedido {
+  + {static} desdeCodigo(codigo: String): EstadoPedido
+  + {static} codigos(): List<String>
+}
+
+Pedido o-> "1" EstadoPedido : estadoActual
+EstadoPedido <|.. EstadoBase
+EstadoBase <|-- EstadoPendiente
+EstadoBase <|-- EstadoPagado
+EstadoBase <|-- EstadoEnPreparacion
+EstadoBase <|-- EstadoEnviado
+EstadoBase <|-- EstadoEntregado
+EstadoBase <|-- EstadoCancelado
+EstadoBase ..> TransicionInvalidaException : lanza
+Pedido ..> EstadosPedido : reconstruir()
+@enduml
