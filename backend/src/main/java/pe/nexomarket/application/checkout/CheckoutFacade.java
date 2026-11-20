@@ -24,23 +24,27 @@ public class CheckoutFacade {
     private final ServicioPedido pedidos;
     private final PedidoAccionService acciones;
 
-    public CheckoutFacade(ServicioInventario inventario, ServicioPago pago, ServicioPedido pedidos,
-            PedidoAccionService acciones) {
+    // Inyección de dependencias por constructor
+    public CheckoutFacade(ServicioInventario inventario, ServicioPago pago,
+            ServicioPedido pedidos, PedidoAccionService acciones) {
         this.inventario = inventario;
         this.pago = pago;
         this.pedidos = pedidos;
         this.acciones = acciones;
     }
 
+    // Si el pago falla, la transacción revierte el stock y el pedido
     @Transactional
-    public DetallePedido comprar(UsuarioSesion cliente, List<ItemCarrito> items, String metodoPago) {
+    public DetallePedido comprar(UsuarioSesion cliente, List<ItemCarrito> items,
+            String metodoPago) {
         if (cliente == null || !cliente.esCliente() || cliente.clienteId() == null) {
             throw new AccesoDenegadoException("Inicia sesión como cliente para comprar.");
         }
-        List<LineaPedido> lineas = inventario.reservar(items);                     // 1. Inventario
-        BigDecimal total = lineas.stream().map(LineaPedido::subtotal).reduce(BigDecimal.ZERO, BigDecimal::add);
-        Pedido pedido = pedidos.crear(cliente.clienteId(), lineas);               // 2. Pedido (PENDIENTE)
-        pago.cobrar(metodoPago, total);                                           // 3. Pago (Strategy)
-        return acciones.confirmarPago(pedido.getId());                            // 4. Command + State + Observer
+        List<LineaPedido> lineas = inventario.reservar(items);          // 1. Inventario
+        BigDecimal total = lineas.stream().map(LineaPedido::subtotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        Pedido pedido = pedidos.crear(cliente.clienteId(), lineas);    // 2. Pedido
+        pago.cobrar(metodoPago, total);                                // 3. Pago (Strategy)
+        return acciones.confirmarPago(pedido.getId());                 // 4. Command + State
     }
 }
