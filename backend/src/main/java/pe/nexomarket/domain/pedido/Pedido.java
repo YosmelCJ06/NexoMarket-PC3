@@ -46,8 +46,10 @@ public class Pedido {
 
     // ---------- OBSERVER: gestión de suscriptores ----------
 
+    /** Agrega un observador; si ya estaba suscrito no lo duplica (evita avisos repetidos). */
     public void suscribir(ObservadorPedido observador) {
-        observadores.add(Objects.requireNonNull(observador));
+        Objects.requireNonNull(observador);
+        if (!observadores.contains(observador)) observadores.add(observador);
     }
 
     public void desuscribir(ObservadorPedido observador) {

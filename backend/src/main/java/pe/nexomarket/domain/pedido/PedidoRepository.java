@@ -12,5 +12,9 @@ public interface PedidoRepository {
 
     List<Pedido> listar();
 
+    /** Guarda el estado y el monto actuales del pedido. */
     void guardar(Pedido pedido);
+
+    /** Correo del cliente, usado por el observador que le notifica los cambios. */
+    Optional<String> buscarCorreoCliente(int clienteId);
 }

@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/orders")
 public class OrderController {
     private static final List<String> ORDER_STATUSES = List.of(
-            "PENDIENTE", "CONFIRMADO", "PREPARANDO", "ENVIADO", "ENTREGADO", "CANCELADO");
+            "PENDIENTE", "PAGADO", "CONFIRMADO", "PREPARANDO", "ENVIADO", "ENTREGADO", "CANCELADO");
 
     private final JdbcTemplate jdbcTemplate;
 

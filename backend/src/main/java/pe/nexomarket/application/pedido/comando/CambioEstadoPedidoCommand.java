@@ -40,6 +40,11 @@ public abstract class CambioEstadoPedidoCommand implements Comando {
         return pedido.getId();
     }
 
+    /** Pedido sobre el que actúa el comando (para persistirlo después de ejecutar o deshacer). */
+    public Pedido pedido() {
+        return pedido;
+    }
+
     /** Acción concreta que se delega al Receiver (el Pedido y su State). */
     protected abstract void aplicar(Pedido pedido);
 
