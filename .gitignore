@@ -1,0 +1,11 @@
+node_modules/
+.env
+.env.*
+!.env.example
+npm-debug.log*
+backend/target/
+# IDE y sistema
+.idea/
+*.iml
+.vscode/
+Thumbs.db
