@@ -12,6 +12,9 @@ public interface PedidoRepository {
 
     List<Pedido> listar();
 
+    /** Registra un pedido nuevo (estado PENDIENTE) con sus líneas y devuelve el pedido con su id. */
+    Pedido crear(int clienteId, List<LineaPedido> lineas);
+
     /** Guarda el estado y el monto actuales del pedido. */
     void guardar(Pedido pedido);
 

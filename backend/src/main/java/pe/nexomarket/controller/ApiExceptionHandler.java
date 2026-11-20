@@ -16,7 +16,8 @@ import pe.nexomarket.domain.seguridad.AccesoDenegadoException;
  * Convierte las excepciones del dominio en respuestas HTTP con un mensaje claro,
  * para que los controladores no repitan bloques try/catch.
  */
-@RestControllerAdvice(assignableTypes = {PedidoPatronesController.class, ReporteController.class})
+@RestControllerAdvice(assignableTypes = {PedidoPatronesController.class, ReporteController.class,
+        CheckoutController.class})
 public class ApiExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
 

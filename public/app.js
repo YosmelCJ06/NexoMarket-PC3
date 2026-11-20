@@ -208,7 +208,7 @@ function header() {
 }
 
 function footer() {
-  return '<footer class="footer-note">Catálogo conectado a PostgreSQL · Checkout de demostración</footer>';
+  return '<footer class="footer-note">Catálogo y pedidos en PostgreSQL · Pagos simulados (sin cobro real)</footer>';
 }
 
 function renderProducts() {
@@ -363,7 +363,7 @@ function renderCart() {
   return `<div class="cart-overlay" data-action="overlay-close"><aside class="cart-drawer" role="dialog" aria-modal="true" aria-labelledby="cart-title"><div class="drawer-heading"><h2 id="cart-title">Tu bolsa (${lines.reduce((sum, line) => sum + line.quantity, 0)})</h2><button class="icon-button" type="button" data-action="cart-close" aria-label="Cerrar bolsa">×</button></div>
     <div class="cart-lines">${lines.length ? lines.map(line => `<article class="cart-line"><img src="${escapeHtml(line.product.image)}" alt=""><div><h3>${escapeHtml(line.product.name)}</h3><p>${money(line.product.price)} c/u</p><div class="quantity"><button type="button" data-quantity="-1" data-product-id="${line.productId}" aria-label="Reducir cantidad">−</button><span>${line.quantity}</span><button type="button" data-quantity="1" data-product-id="${line.productId}" aria-label="Aumentar cantidad">+</button></div></div><button class="icon-button" type="button" data-remove-cart="${line.productId}" aria-label="Quitar ${escapeHtml(line.product.name)}">×</button></article>`).join('') : '<p class="empty-state">Tu bolsa está vacía.</p>'}</div>
     ${lines.length ? `<div class="cart-total"><span>Total</span><span>${money(total)}</span></div><button class="button login-submit" type="button" data-action="checkout-open">Continuar compra</button>` : ''}
-    ${checkoutOpen && lines.length ? `<form class="checkout-form" data-form="checkout"><h3>Datos de entrega</h3><label class="field"><span>Nombre del destinatario</span><input name="customerName" required value="${escapeHtml(user.name)}"></label><label class="field"><span>Dirección</span><input name="address" required placeholder="Av. / calle y número"></label><label class="field"><span>Método de pago</span><select name="payment"><option>YAPE</option><option>TARJETA</option></select></label><p class="muted" style="font-size:.78rem">Pago y envío en modo de demostración.</p><button class="button login-submit" type="submit">Confirmar pedido · ${money(total)}</button></form>` : ''}
+    ${checkoutOpen && lines.length ? `<form class="checkout-form" data-form="checkout"><h3>Datos de entrega</h3><label class="field"><span>Nombre del destinatario</span><input name="customerName" required value="${escapeHtml(user.name)}"></label><label class="field"><span>Dirección</span><input name="address" required placeholder="Av. / calle y número"></label><label class="field"><span>Método de pago</span><select name="payment"><option>YAPE</option><option>TARJETA</option></select></label><p class="muted" style="font-size:.78rem">El pago es simulado: no se realiza ningún cobro real.</p><button class="button login-submit" type="submit">Confirmar pedido · ${money(total)}</button></form>` : ''}
   </aside></div>`;
 }
 
@@ -417,31 +417,27 @@ async function restoreSession() {
   renderLogin();
 }
 
-function submitCheckout(form) {
+// El checkout llama a POST /api/orders: el CheckoutFacade descuenta stock, guarda el pedido,
+// cobra con el método elegido (Strategy) y lo marca como PAGADO (Command + State + Observer).
+async function submitCheckout(form) {
   const formData = new FormData(form);
-  const orderItems = cart.map(line => {
-    const product = store.products.find(item => item.id === line.productId);
-    return { productId: product.id, name: product.name, quantity: line.quantity, price: product.price };
+  const result = await callApi('/api/orders', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      items: cart.map(line => ({ productoId: line.productId, cantidad: line.quantity })),
+      metodoPago: String(formData.get('payment')),
+    }),
   });
-  const orderTotal = orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const order = {
-    id: store.orders.reduce((highest, item) => Math.max(highest, item.id), 10000) + 1,
-    customerName: String(formData.get('customerName')).trim(),
-    customerEmail: user.email,
-    address: String(formData.get('address')).trim(),
-    payment: String(formData.get('payment')),
-    items: orderItems,
-    total: orderTotal,
-    status: 'PREPARANDO',
-    createdAt: new Date().toISOString(),
-  };
-  store.orders.push(order);
-  saveStore();
+  if (!result.ok) {
+    notify(result.data.message || 'No se pudo registrar el pedido.');
+    return;
+  }
   cart = [];
   cartOpen = false;
   checkoutOpen = false;
-  render();
-  notify(`Pedido #${order.id} registrado en modo demostración (aún no se guarda en PostgreSQL).`);
+  await loadProducts();
+  notify(`Pedido ${result.data.codigo} registrado. Estado: ${result.data.estado}.`);
 }
 
 app.addEventListener('click', async event => {
@@ -589,7 +585,7 @@ app.addEventListener('submit', async event => {
     loadCustomerOrders();
   }
 
-  if (form.dataset.form === 'checkout') submitCheckout(form);
+  if (form.dataset.form === 'checkout') await submitCheckout(form);
 
   if (form.dataset.form === 'product') {
     const product = {
